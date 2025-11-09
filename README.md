@@ -1,62 +1,65 @@
-🌌 Simulador do Sistema Solar em Python
-Um simulador interativo do sistema solar desenvolvido em Python usando Pygame, com planetas em movimento orbital e controles de velocidade.
+# 🌌 Simulador do Sistema Solar em Python
 
-✨ Características
-Planetas em movimento orbital com velocidades realistas
+Um simulador interativo do sistema solar desenvolvido em Python usando **Pygame**, com planetas em movimento orbital e controles de velocidade.
 
-Imagens reais dos planetas
+---
 
-Controles interativos de velocidade e pausa
+## ✨ Características
 
-Visualização em tempo real das órbitas
+- Planetas em movimento orbital com velocidades realistas  
+- Imagens reais dos planetas  
+- Controles interativos de velocidade e pausa  
+- Visualização em tempo real das órbitas  
+- Interface limpa e informativa  
 
-Interface limpa e informativa
+---
 
-🛠️ Tecnologias Utilizadas
-Python 3.8+
+## 🛠️ Tecnologias Utilizadas
 
-Pygame
+- **Python 3.8+**  
+- **Pygame**  
+- **NumPy**
 
-NumPy
+---
 
-📋 Pré-requisitos
-Python 3.8 ou superior instalado
+## 📋 Pré-requisitos
 
-Pip (gerenciador de pacotes do Python)
+- Python 3.8 ou superior instalado  
+- Pip (gerenciador de pacotes do Python)
 
-🚀 Instalação e Execução
-1. Baixe e extraia os arquivos do projeto
-2. Navegue até a pasta do projeto
-bash
-cd solar
-3. (Opcional) Crie um ambiente virtual
-bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
+---
 
-# Linux/Mac
-python3 -m venv venv
-source venv/bin/activate
-4. Instale as dependências
-bash
-pip install -r requirements.txt
-5. Execute o projeto
-bash
-python src/main.py
-🎮 Controles
-Tecla	Ação
-+ ou =	Aumentar velocidade
--	Diminuir velocidade
-ESPAÇO	Pausar/Continuar simulação
-R	Resetar simulação
-1	Velocidade muito lenta (0.1x)
-2	Velocidade normal (1.0x)
-3	Velocidade rápida (3.0x)
-4	Velocidade máxima (10.0x)
-ESC	Sair do simulador
-📁 Estrutura do Projeto
-text
+## 🚀 Instalação e Execução
+
+1. **Baixe e extraia os arquivos do projeto**  
+2. **Navegue até a pasta do projeto:**
+   ```bash
+   cd solar
+   ```
+3. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Execute o projeto:
+   ```bash
+   python src/main.py
+   ```
+---
+## 🎮 Controles
+| Tecla      | Ação                          |
+| ---------- | ----------------------------- |
+| `+` ou `=` | Aumentar velocidade           |
+| `-`        | Diminuir velocidade           |
+| `ESPAÇO`   | Pausar/Continuar simulação    |
+| `R`        | Resetar simulação             |
+| `1`        | Velocidade muito lenta (0.1x) |
+| `2`        | Velocidade normal (1.0x)      |
+| `3`        | Velocidade rápida (3.0x)      |
+| `4`        | Velocidade máxima (10.0x)     |
+| `ESC`      | Sair do simulador             |
+
+## 📁 Estrutura do Projeto
+ ```bash
 solar/
 ├── README.md
 ├── requirements.txt
@@ -75,19 +78,26 @@ solar/
     ├── solar_system.py
     ├── planet.py
     └── constants.py
-🔧 Solução de Problemas
-Erro: "ModuleNotFoundError: No module named 'pygame'"
-bash
+```
+
+## 🔧 Solução de Problemas
+```bash
+Erro: ModuleNotFoundError: No module named 'pygame'
+```
+➡️ Solução:
+```bash
 pip install pygame
-As imagens não carregam
-Verifique se a pasta assets/ contém todas as imagens dos planetas
+```
 
-Os nomes devem ser exatos: sun.png, earth.png, etc.
+As imagens não carregam:
+1. Verifique se a pasta assets/ contém todas as imagens dos planetas.
+2. Os nomes devem ser exatamente: sun.png, earth.png, etc.
 
-Erro de execução
-Certifique-se de executar da pasta raiz do projeto
+Erro de execução:
+1. Certifique-se de executar o comando a partir da pasta raiz do projeto.
+2. Verifique se está usando Python 3.8+.
 
-Verifique se está usando Python 3.8+
-
-📄 Licença
+--
+## 📄 Licença
 Este projeto está sob a licença MIT.
+
