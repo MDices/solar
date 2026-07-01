@@ -123,6 +123,7 @@ function main() {
     bodies,
     sun,
     infoCard,
+    renderer: sceneManager.renderer, // necessário p/ o enxame GPGPU (Fase 2)
   });
 
   // Alvos de picking: Sol + planetas (esferas de colisão invisíveis).
@@ -160,6 +161,16 @@ function main() {
     if (e.key === 'Escape') focusController.clearFocus();
   });
 
+  // Posição do mouse em NDC (-1..1) para a repulsão do enxame GPGPU (Fase 2).
+  const canvasEl = sceneManager.renderer.domElement;
+  canvasEl.addEventListener('pointermove', (e) => {
+    const r = canvasEl.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    const y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    focusController.setPointer(x, y, true);
+  });
+  canvasEl.addEventListener('pointerleave', () => focusController.setPointer(0, 0, false));
+
   // 8) Laço de render: atualiza tudo a cada frame.
   // Degradação adaptativa (spec seção 10): se o FPS ficar baixo por alguns
   // segundos, desliga o bloom (o pós-processamento mais caro) para recuperar
@@ -193,7 +204,7 @@ function main() {
     if (cameraMode === 'cinematic') {
       cinematicPath.update(dt);
     }
-    focusController.update(dt);
+    focusController.update(dt, elapsed);
 
     // Frustum de mundo a partir da câmera já posicionada neste frame.
     const camera = sceneManager.camera;

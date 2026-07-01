@@ -13,6 +13,10 @@ import { AppState } from '../core/AppState.js';
 import { LOD } from '../bodies/ParticleSphere.js';
 import { getBodyById } from '../data/planets.js';
 import { easeInOutCubic } from '../util/math.js';
+import { FocusSwarm } from '../bodies/FocusSwarm.js';
+
+// Teto de partículas do enxame GPGPU (Fase 2) por corpo, por segurança de perf.
+const SWARM_MAX_COUNT = 50000;
 
 // Multiplicadores usados para calcular a distância da câmera ao corpo em foco,
 // em função do "tamanho" do corpo. Deixamos o corpo confortavelmente enquadrado.
@@ -29,7 +33,7 @@ export class FocusController {
    * @param {import('../ui/InfoCard.js').InfoCard} [options.infoCard]
    * @param {number} [options.tweenDuration=1.5] - duração do tween da câmera (s)
    */
-  constructor({ cameraRig, appState, bodies, sun, infoCard, tweenDuration = 1.5 } = {}) {
+  constructor({ cameraRig, appState, bodies, sun, infoCard, renderer, tweenDuration = 1.5 } = {}) {
     /** @type {import('../camera/CameraRig.js').CameraRig} */
     this.cameraRig = cameraRig;
     /** @type {AppState} */
@@ -40,10 +44,30 @@ export class FocusController {
     this.sun = sun;
     /** @type {import('../ui/InfoCard.js').InfoCard|undefined} */
     this.infoCard = infoCard;
+    /** @type {THREE.WebGLRenderer|undefined} necessário p/ o enxame GPGPU (Fase 2) */
+    this.renderer = renderer;
     /** @type {number} */
     this.tweenDuration = tweenDuration;
     /** @type {boolean} */
     this._tweening = false;
+
+    // ------- Fase 2: enxame GPGPU do corpo em foco -------
+    /** @type {FocusSwarm|null} */
+    this._swarm = null;
+    /** @type {import('../bodies/Planet.js').Planet|null} */
+    this._swarmPlanet = null;
+    /** @type {THREE.Raycaster} */
+    this._raycaster = new THREE.Raycaster();
+    /** @type {THREE.Plane} plano p/ projetar o mouse perto do corpo */
+    this._pointerPlane = new THREE.Plane();
+    /** @type {THREE.Vector2} posição do mouse em NDC (-1..1) */
+    this._ndc = new THREE.Vector2();
+    /** @type {boolean} mouse sobre a cena? */
+    this._pointerActive = false;
+    /** @type {THREE.Vector3} vetores de trabalho (mouse) */
+    this._tmpWorld = new THREE.Vector3();
+    this._tmpNormal = new THREE.Vector3();
+    this._tmpLocal = new THREE.Vector3();
 
     // ------- estado interno do tween/foco -------
     /**
@@ -200,6 +224,9 @@ export class FocusController {
     // Já focado neste mesmo corpo (e não saindo): nada a fazer.
     if (this._focusedId === bodyId && this._phase !== 'exiting') return;
 
+    // Trocando de corpo (ou re-focando após sair): desmonta o enxame anterior.
+    this._teardownSwarm();
+
     const cam = this._camera;
 
     // Se estamos partindo do estado sem foco, salvamos a pose atual da câmera
@@ -214,6 +241,9 @@ export class FocusController {
     // Troca de LOD: o corpo focado vai para FOCUS, os demais para FAR (concentra
     // o orçamento de partículas — spec seção 5).
     this._applyFocusLOD(bodyId);
+
+    // Fase 2: cria o enxame GPGPU do planeta focado (o Sol permanece estático).
+    this._createSwarm(bodyId);
 
     // Estado global + modo de câmera. Em foco ficamos em 'explore' (o passeio
     // cinematográfico não deve interferir).
@@ -256,6 +286,9 @@ export class FocusController {
   clearFocus() {
     if (this._phase === 'idle') return;
 
+    // Fase 2: desmonta o enxame GPGPU e reexibe a esfera estática.
+    this._teardownSwarm();
+
     // Restaura o LOD de todos os corpos para o padrão (NEAR).
     this._restoreLOD();
 
@@ -290,9 +323,12 @@ export class FocusController {
    * @param {number} dt - delta time em segundos
    * @returns {void}
    */
-  update(dt) {
+  update(dt, elapsed = 0) {
     const cam = this._camera;
     if (!cam) return;
+
+    // Fase 2: dirige o enxame GPGPU (mouse + simulação) enquanto existir.
+    if (this._swarm) this._updateSwarm(dt, elapsed);
 
     if (this._phase === 'entering' || this._phase === 'exiting') {
       // Avança o progresso do tween.
@@ -388,5 +424,104 @@ export class FocusController {
         body.setLOD(LOD.NEAR);
       }
     }
+  }
+
+  /**
+   * Registra a posição do mouse (NDC -1..1) e se está sobre a cena. Usado pelo
+   * enxame GPGPU para a repulsão do cursor (Fase 2).
+   * @param {number} ndcX
+   * @param {number} ndcY
+   * @param {boolean} active
+   * @returns {void}
+   */
+  setPointer(ndcX, ndcY, active) {
+    this._ndc.set(ndcX, ndcY);
+    this._pointerActive = !!active;
+  }
+
+  /**
+   * Cria o enxame GPGPU (Fase 2) para um planeta focado. O Sol não recebe
+   * enxame (permanece estático). Falha graciosa → mantém a esfera estática.
+   * @private
+   * @param {string} bodyId
+   * @returns {void}
+   */
+  _createSwarm(bodyId) {
+    const planet = this.bodies ? this.bodies.get(bodyId) : null;
+    if (!planet || !this.renderer) return;
+
+    const data = getBodyById(bodyId);
+    const radius = this._resolveBodyRadius(bodyId);
+    const count = Math.min(SWARM_MAX_COUNT, Math.round(20000 + radius * 12000));
+
+    let swarm = new FocusSwarm({
+      renderer: this.renderer,
+      radius,
+      count,
+      color: data ? data.corBase : 0xffffff,
+      size: 2.4,
+      brightness: 1.0,
+    });
+    try {
+      swarm.build();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[FocusSwarm] indisponível, mantendo esfera estática:', e && e.message);
+      swarm = null;
+    }
+    if (!swarm) return;
+
+    planet.setStaticVisible(false);
+    planet.group.add(swarm.object3d);
+    this._swarm = swarm;
+    this._swarmPlanet = planet;
+  }
+
+  /**
+   * Desmonta o enxame GPGPU e reexibe a esfera estática do planeta.
+   * @private
+   * @returns {void}
+   */
+  _teardownSwarm() {
+    if (this._swarm && this._swarmPlanet) {
+      this._swarmPlanet.group.remove(this._swarm.object3d);
+      this._swarm.dispose();
+      this._swarmPlanet.setStaticVisible(true);
+    }
+    this._swarm = null;
+    this._swarmPlanet = null;
+  }
+
+  /**
+   * Projeta o mouse num plano no centro do planeta, converte para o espaço
+   * LOCAL do Group e avança a simulação do enxame.
+   * @private
+   * @param {number} dt
+   * @param {number} elapsed
+   * @returns {void}
+   */
+  _updateSwarm(dt, elapsed) {
+    const swarm = this._swarm;
+    const planet = this._swarmPlanet;
+    if (!swarm || !planet) return;
+
+    if (this._pointerActive) {
+      const cam = this._camera;
+      planet.getWorldPosition(this._tmpWorld);
+      cam.getWorldDirection(this._tmpNormal).negate(); // normal do plano → câmera
+      this._pointerPlane.setFromNormalAndCoplanarPoint(this._tmpNormal, this._tmpWorld);
+      this._raycaster.setFromCamera(this._ndc, cam);
+      const hit = this._raycaster.ray.intersectPlane(this._pointerPlane, this._tmpLocal);
+      if (hit) {
+        planet.group.worldToLocal(this._tmpLocal); // mundo → local do planeta
+        swarm.setMouse(this._tmpLocal);
+      } else {
+        swarm.setMouse(null);
+      }
+    } else {
+      swarm.setMouse(null);
+    }
+
+    swarm.update(dt, elapsed);
   }
 }
