@@ -289,6 +289,17 @@ export class Planet {
   }
 
   /**
+   * Mostra/esconde a esfera estática (e o anel). Usado na Fase 2: ao focar, o
+   * FocusSwarm (GPGPU) assume o lugar da esfera estática; ao sair, ela volta.
+   * @param {boolean} visible
+   * @returns {void}
+   */
+  setStaticVisible(visible) {
+    if (this.sphere) this.sphere.object3d.visible = visible;
+    if (this.ring) this.ring.visible = visible;
+  }
+
+  /**
    * Posição atual no espaço de mundo (para foco/câmera).
    * @param {THREE.Vector3} [target] - vetor de saída opcional
    * @returns {THREE.Vector3}
