@@ -1,3 +1,10 @@
+# Node / Vite (nova stack web)
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
 # Virtual environment
 venv/
 env/

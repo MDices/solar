@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Sistema Solar — Partículas 3D</title>
+    <meta
+      name="description"
+      content="Sistema solar reimaginado como nuvens de partículas luminosas em 3D (Three.js/WebGL)."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Container do canvas WebGL em tela cheia. O renderer do Three.js
+         injeta seu <canvas> aqui (ver SceneManager). -->
+    <div id="app"></div>
+
+    <!-- Raiz da camada de UI em HTML sobreposta ao canvas (InfoCard, HUD, dica de
+         controles). Fica acima do canvas via z-index; a maior parte é pointer-events:none
+         para não bloquear a interação com a cena, exceto os controles clicáveis. -->
+    <div id="ui-root" aria-live="polite"></div>
+
+    <!-- Fallback exibido quando o WebGL não está disponível (ver spec seção 10).
+         Começa escondido; main.js o revela caso a detecção de WebGL falhe. -->
+    <div id="webgl-fallback" hidden>
+      <div class="fallback-box">
+        <h1>Seu navegador não suporta WebGL</h1>
+        <p>
+          Esta experiência precisa de WebGL para renderizar o sistema solar em partículas.
+          Tente um navegador atualizado (Chrome, Firefox, Edge ou Safari) com aceleração de
+          hardware ativada.
+        </p>
+      </div>
+    </div>
+
+    <!-- Ponto de entrada da aplicação (ES module). -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
