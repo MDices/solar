@@ -22,6 +22,10 @@ import * as THREE from 'three';
 import { AppState } from '../core/AppState.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+/** Limites de zoom padrão dos OrbitControls (visão do sistema). */
+const DEFAULT_MIN_DISTANCE = 12;
+const DEFAULT_MAX_DISTANCE = 400;
+
 export class CameraRig {
   /**
    * @param {object} options
@@ -56,6 +60,14 @@ export class CameraRig {
      */
     this._onUserInput = this._handleUserInput.bind(this);
 
+    /**
+     * Modo "seguir": os controles orbitam um corpo em foco (limites de zoom
+     * próprios, sem contar ociosidade). Ver enterFollow()/exitFollow().
+     * @type {boolean}
+     * @private
+     */
+    this._following = false;
+
     /** @type {string[]} eventos de input que disparam o modo explore @private */
     this._inputEvents = ['pointerdown', 'wheel', 'touchstart', 'keydown'];
   }
@@ -72,8 +84,8 @@ export class CameraRig {
     controls.dampingFactor = 0.08;
 
     // Limites confortáveis para o sistema (planeta mais externo ~80 unidades).
-    controls.minDistance = 12;
-    controls.maxDistance = 400;
+    controls.minDistance = DEFAULT_MIN_DISTANCE;
+    controls.maxDistance = DEFAULT_MAX_DISTANCE;
 
     // Zoom/rotação suaves; sem pan para não "perder" o sistema de vista.
     controls.enablePan = false;
@@ -115,9 +127,13 @@ export class CameraRig {
 
     // Detecção de ociosidade só faz sentido no modo explore. Não avançamos o
     // cronômetro enquanto há foco ativo (senão a ociosidade jogaria a câmera de
-    // volta ao cinematic no meio do foco — bug relatado na revisão): durante o
-    // foco os controles ficam desabilitados, então usamos isso como guarda.
-    if (this.appState.get('cameraMode') === 'explore' && this.controls.enabled) {
+    // volta ao cinematic no meio do foco — bug relatado na revisão): no modo
+    // "seguir" os controles ficam ligados, então a guarda é _following.
+    if (
+      this.appState.get('cameraMode') === 'explore' &&
+      this.controls.enabled &&
+      !this._following
+    ) {
       this._idleTime += dt;
       if (this._idleTime >= this.idleTimeout) {
         // Ficou ocioso: sinaliza retorno ao passeio cinematográfico. O
@@ -174,6 +190,40 @@ export class CameraRig {
     if (enabled && !was) {
       this._resyncControls();
     }
+  }
+
+  /**
+   * Entra no modo "seguir": habilita os controles orbitando `target` (o corpo
+   * em foco), com limites de zoom relativos ao enquadramento. Sincroniza o
+   * spherical com a pose atual usando o alvo REAL (não a heurística de
+   * _resyncControls), então não há salto. Usado pelo FocusController ao fim do
+   * tween de entrada.
+   * @param {THREE.Vector3} target
+   * @param {number} minDistance
+   * @param {number} maxDistance
+   * @returns {void}
+   */
+  enterFollow(target, minDistance, maxDistance) {
+    if (!this.controls) return;
+    const c = this.controls;
+    c.minDistance = minDistance;
+    c.maxDistance = maxDistance;
+    c.target.copy(target);
+    c.enabled = true;
+    this._following = true;
+    c.update();
+  }
+
+  /**
+   * Sai do modo "seguir": restaura os limites de zoom padrão. Não mexe em
+   * `enabled` (quem chama decide, ex.: desliga para o tween de saída).
+   * @returns {void}
+   */
+  exitFollow() {
+    this._following = false;
+    if (!this.controls) return;
+    this.controls.minDistance = DEFAULT_MIN_DISTANCE;
+    this.controls.maxDistance = DEFAULT_MAX_DISTANCE;
   }
 
   /**

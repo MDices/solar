@@ -37,9 +37,10 @@ void main() {
   vec3 viewNormal = normalize(normalMatrix * normalize(position));
   float facing = clamp(viewNormal.z, 0.0, 1.0);
   float rim = pow(1.0 - facing, 2.0);
-  // Planeta: corpo bem visível (0.78) + forte realce de borda que o bloom
-  // transforma no glow da borda (fresnel). Sol: uniforme (1.0).
-  vShade = mix(1.0, 0.78 + 1.15 * rim, uShade);
+  // Planeta: sem escurecer o centro (a referência não sombreia — a borda fica
+  // mais densa naturalmente pela projeção da casca); só um leve realce de rim
+  // que o bloom transforma em halo. Sol: uniforme (1.0).
+  vShade = mix(1.0, 1.0 + 0.35 * rim, uShade);
 
   // Cintilação temporal leve (glitter vivo).
   vTwinkle = 0.85 + 0.15 * sin(uTime * 2.4 + aSeed * 12.566);

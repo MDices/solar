@@ -72,7 +72,9 @@ export class Sun {
       size: 2.2,
       jitter: 0.06,
       blending: THREE.AdditiveBlending,
-      brightness: 0.13,
+      // Com o bloom forte (threshold 0) o Sol precisa de bem menos energia
+      // para o halo não engolir os planetas internos.
+      brightness: 0.06,
       facing3D: false,
       rng: this._rng,
     });

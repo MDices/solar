@@ -30,7 +30,8 @@ void main() {
   vec3 viewNormal = normalize(normalMatrix * normalize(pos + 1e-5));
   float facing = clamp(viewNormal.z, 0.0, 1.0);
   float rim = pow(1.0 - facing, 2.0);
-  vShade = 0.78 + 1.15 * rim;
+  // Sem escurecer o centro (como a referência); leve realce de rim p/ o bloom.
+  vShade = 1.0 + 0.35 * rim;
 
   vTwinkle = 0.85 + 0.15 * sin(uTime * 2.4 + aSeed * 12.566);
 
