@@ -94,19 +94,19 @@ export class Planet {
     const radius = (d ? d.raioRel : 1) * this.sceneScale;
     this._radius = radius;
 
-    // Contagem-base (nível NEAR) proporcional ao tamanho: nuvem MUITO densa
-    // (treliça geodésica como a referência). Gigantes ficam ainda mais densos.
-    const baseCount = Math.round(20000 + radius * 12000);
+    // Contagem-base (nível NEAR) proporcional ao tamanho. Fora do foco o planeta
+    // é pequeno na tela; a casca esparsa + bloom já lê como um corpo brilhante,
+    // sem precisar fechar a superfície.
+    const baseCount = Math.round(8000 + radius * 4000);
 
     this.sphere = new ParticleSphere({
       radius,
       count: baseCount,
       color: d ? d.corBase : 0xffffff,
-      // Pontos pequenos e nítidos → treliça densa. NormalBlending + depthWrite
-      // (ver ParticleSphere): a face frontal oclui a traseira → esfera SÓLIDA
-      // texturizada com a cor do planeta, não um borrão aditivo lavado. O rim
-      // (fresnel) fica mais claro e o bloom o transforma no glow da borda.
-      size: 2.0,
+      // Pontos pequenos e nítidos, opacos (NormalBlending + depthWrite, ver
+      // ParticleSphere): a face frontal oclui a traseira. O glow vem do bloom
+      // (calibrado na referência), não do blending.
+      size: 0.16,
       jitter: 0.05, // casca fina p/ a esfera ler bem definida
       blending: THREE.NormalBlending,
       brightness: 1.0,
@@ -289,14 +289,15 @@ export class Planet {
   }
 
   /**
-   * Mostra/esconde a esfera estática (e o anel). Usado na Fase 2: ao focar, o
-   * FocusSwarm (GPGPU) assume o lugar da esfera estática; ao sair, ela volta.
+   * Mostra/esconde a esfera estática. Usado na Fase 2: ao focar, o FocusSwarm
+   * (GPGPU) assume o lugar da esfera estática; ao sair, ela volta. O anel NÃO é
+   * afetado: o enxame substitui só o corpo, e o anel continua animando (o
+   * material compartilhado segue recebendo uTime via sphere.update).
    * @param {boolean} visible
    * @returns {void}
    */
   setStaticVisible(visible) {
     if (this.sphere) this.sphere.object3d.visible = visible;
-    if (this.ring) this.ring.visible = visible;
   }
 
   /**

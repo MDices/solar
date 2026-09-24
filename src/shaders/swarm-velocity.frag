@@ -122,5 +122,14 @@ void main() {
   vel += force * uDelta;
   vel *= uDamping; // atrito
 
+  // Segurança: limita a velocidade a uma fração do raio por segundo. Evita que
+  // qualquer combinação de forças (ex.: mouse muito perto) arranque partículas
+  // para longe da esfera de forma visualmente "quebrada".
+  float maxSpeed = uRadius * 2.5;
+  float speed = length(vel);
+  if (speed > maxSpeed) {
+    vel = vel * (maxSpeed / speed);
+  }
+
   gl_FragColor = vec4(vel, 1.0);
 }

@@ -12,19 +12,27 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /**
- * Parâmetros de bloom padrão (spec seção 4: partículas aditivas alimentam o glow).
- * `threshold` alto: só os núcleos realmente brilhantes (Sol, hotspots) florescem —
- * evita lavar a cena inteira. Opera em espaço linear HDR, antes do tone mapping.
+ * Parâmetros de bloom padrão (spec seção 4). Calibrados na referência
+ * (particles.casberry.in: strength 1.8, radius 0.4, threshold 0): o bloom É o
+ * efeito — pontos opacos pequenos viram "faíscas" com halo neon. `threshold` 0
+ * faz tudo florescer; o ACES no OutputPass segura os núcleos sem clipar.
  */
-const DEFAULT_BLOOM = Object.freeze({ strength: 0.18, radius: 0.12, threshold: 0.93 });
+const DEFAULT_BLOOM = Object.freeze({ strength: 0.85, radius: 0.4, threshold: 0 });
 
 /**
- * Escala de resolução do bloom (spec seção 11: alvo de 60fps em GPU integrada).
- * O UnrealBloomPass roda vários passes de mip; como o resultado é intrinsecamente
- * borrado, renderizá-lo a meia resolução é visualmente quase idêntico e economiza
- * ~4× de fill-rate — decisivo em GPUs integradas e em telas hi-DPI (dpr 2).
+ * Escala de resolução do bloom. Em resolução CHEIA como a referência: os mips
+ * do UnrealBloomPass partem da resolução de entrada, então renderizar a meia
+ * resolução alarga o halo 2× em pixels de tela (o `radius` só pesa os mips,
+ * não encolhe o kernel) — o glow vira névoa em vez de faísca.
  */
-const BLOOM_RESOLUTION_SCALE = 0.5;
+const BLOOM_RESOLUTION_SCALE = 1.0;
+
+/**
+ * Escala usada na degradação por FPS baixo (ver degradeBloom). Como o bloom é o
+ * visual inteiro, NÃO o desligamos — só baixamos a resolução (~4× menos
+ * fill-rate; halo um pouco mais largo, aceitável).
+ */
+const BLOOM_DEGRADED_SCALE = 0.5;
 
 /** Contagem e raio do campo de estrelas de fundo (spec seção 4/8: profundidade). */
 const STARFIELD_COUNT = 2500;
@@ -64,6 +72,9 @@ export class SceneManager {
 
     /** @type {THREE.Points|null} - campo de estrelas de fundo */
     this._starfield = null;
+
+    /** @type {number} escala de resolução atual do bloom @private */
+    this._bloomScale = BLOOM_RESOLUTION_SCALE;
 
     /** @type {boolean} - true entre webglcontextlost e webglcontextrestored */
     this._contextLost = false;
@@ -108,7 +119,9 @@ export class SceneManager {
     // aditivas + Sol num rolloff suave em vez de clipar tudo para branco/amarelo.
     // Aplicado de fato pelo OutputPass no fim do composer (ver _buildComposer).
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.9;
+    // Exposição contida: com bloom forte, cores claras (Saturno, Vênus) tendem
+    // ao branco; um pouco menos de exposição preserva a saturação do halo.
+    this.renderer.toneMappingExposure = 0.75;
 
     this.container.appendChild(this.renderer.domElement);
 
@@ -185,10 +198,22 @@ export class SceneManager {
     // O bloom roda em resolução reduzida (ver _buildComposer).
     if (this._bloomPass) {
       this._bloomPass.setSize(
-        Math.max(1, Math.round(w * BLOOM_RESOLUTION_SCALE)),
-        Math.max(1, Math.round(h * BLOOM_RESOLUTION_SCALE)),
+        Math.max(1, Math.round(w * this._bloomScale)),
+        Math.max(1, Math.round(h * this._bloomScale)),
       );
     }
+  }
+
+  /**
+   * Degradação graciosa por FPS baixo (spec seção 10): reduz a resolução do
+   * bloom em vez de desligá-lo — sem bloom os corpos perdem o glow que define
+   * o visual. Idempotente.
+   * @returns {void}
+   */
+  degradeBloom() {
+    if (this._bloomScale === BLOOM_DEGRADED_SCALE) return;
+    this._bloomScale = BLOOM_DEGRADED_SCALE;
+    this.resize();
   }
 
   /**
@@ -261,8 +286,8 @@ export class SceneManager {
 
     // Bloom em resolução reduzida (ver BLOOM_RESOLUTION_SCALE): grande economia
     // de fill-rate com perda visual desprezível.
-    const bw = Math.max(1, Math.round(width * BLOOM_RESOLUTION_SCALE));
-    const bh = Math.max(1, Math.round(height * BLOOM_RESOLUTION_SCALE));
+    const bw = Math.max(1, Math.round(width * this._bloomScale));
+    const bh = Math.max(1, Math.round(height * this._bloomScale));
     this._bloomPass = new UnrealBloomPass(
       new THREE.Vector2(bw, bh),
       this.bloomParams.strength,
@@ -301,8 +326,10 @@ export class SceneManager {
       positions[i * 3 + 1] = r * u;
       positions[i * 3 + 2] = r * s * Math.sin(phi);
 
-      // Estrelas majoritariamente brancas/azuladas, brilho variado.
-      const b = 0.6 + Math.random() * 0.4;
+      // Estrelas majoritariamente brancas/azuladas, brilho variado. Contidas:
+      // com bloom threshold 0 elas também florescem, e não podem competir
+      // com os corpos.
+      const b = 0.3 + Math.random() * 0.35;
       color.setRGB(b, b, b + Math.random() * 0.1);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;

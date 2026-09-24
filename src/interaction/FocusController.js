@@ -15,13 +15,30 @@ import { getBodyById } from '../data/planets.js';
 import { easeInOutCubic } from '../util/math.js';
 import { FocusSwarm } from '../bodies/FocusSwarm.js';
 
-// Teto de partículas do enxame GPGPU (Fase 2) por corpo, por segurança de perf.
-const SWARM_MAX_COUNT = 50000;
+// Teto de partículas do enxame GPGPU (Fase 2) por corpo.
+const SWARM_MAX_COUNT = 40000;
+
+// Contagem de referência do enxame quando o planeta preenche o enquadramento
+// de foco — a mesma da referência (casberry: 20k pontos). Ver _createSwarm.
+const SWARM_REFERENCE_COUNT = 20000;
+
+// Tamanho do ponto do enxame em pixels (dpr 1). ~2px como os tetraedros da
+// referência projetados — pequeno o bastante para o fundo aparecer entre os
+// pontos; o bloom faz o resto.
+const SWARM_POINT_PX = 2.0;
+
+// Brilho (HDR) das partículas do enxame.
+const SWARM_BRIGHTNESS = 1.0;
 
 // Multiplicadores usados para calcular a distância da câmera ao corpo em foco,
 // em função do "tamanho" do corpo. Deixamos o corpo confortavelmente enquadrado.
 const FOCUS_DISTANCE_FACTOR = 3.0; // distância = raio * fator (perto → planeta grande na tela)
 const MIN_FOCUS_DISTANCE = 5.5; // piso para corpos muito pequenos (ex.: Mercúrio)
+
+// Faixa de zoom permitida ao usuário enquanto segue um corpo, como múltiplos
+// da distância de foco: chega perto o bastante para "entrar" na casca de
+// partículas, e longe o bastante para ver o planeta pequeno com a órbita.
+const FOLLOW_ZOOM_RANGE = [0.35, 3.0];
 
 export class FocusController {
   /**
@@ -98,6 +115,8 @@ export class FocusController {
     this._tmpOffset = new THREE.Vector3();
     this._tmpCurPos = new THREE.Vector3();
     this._tmpCurTarget = new THREE.Vector3();
+    /** Posição do corpo no frame anterior (fase following) @private */
+    this._prevBodyPos = new THREE.Vector3();
   }
 
   /**
@@ -108,6 +127,17 @@ export class FocusController {
    */
   isActive() {
     return this._phase !== 'idle';
+  }
+
+  /**
+   * Há tween de câmera em andamento (entrada ou saída do foco)? Enquanto SEGUE
+   * um corpo (fase 'following') os OrbitControls ficam ligados em volta dele —
+   * o usuário pode girar/zoom; só durante os tweens o controlador é dono
+   * exclusivo da câmera.
+   * @returns {boolean}
+   */
+  isTweening() {
+    return this._phase === 'entering' || this._phase === 'exiting';
   }
 
   /**
@@ -253,9 +283,13 @@ export class FocusController {
     }
 
     // Desabilita os OrbitControls durante o tween para que ele não seja
-    // "brigado" pela interação/inércia.
-    if (this.cameraRig && typeof this.cameraRig.setControlsEnabled === 'function') {
-      this.cameraRig.setControlsEnabled(false);
+    // "brigado" pela interação/inércia. (Se estávamos seguindo outro corpo,
+    // saímos do modo "seguir" — os limites são refeitos ao fim do tween.)
+    if (this.cameraRig) {
+      if (typeof this.cameraRig.exitFollow === 'function') this.cameraRig.exitFollow();
+      if (typeof this.cameraRig.setControlsEnabled === 'function') {
+        this.cameraRig.setControlsEnabled(false);
+      }
     }
 
     // Monta o tween: da pose atual até a pose de foco.
@@ -301,6 +335,15 @@ export class FocusController {
     // Fecha o InfoCard.
     if (this.infoCard && typeof this.infoCard.hide === 'function') {
       this.infoCard.hide();
+    }
+
+    // Sai do modo "seguir" (restaura limites de zoom) e desliga os controles
+    // durante o tween de saída.
+    if (this.cameraRig) {
+      if (typeof this.cameraRig.exitFollow === 'function') this.cameraRig.exitFollow();
+      if (typeof this.cameraRig.setControlsEnabled === 'function') {
+        this.cameraRig.setControlsEnabled(false);
+      }
     }
 
     // Tween de volta à pose salva.
@@ -357,6 +400,20 @@ export class FocusController {
         this._tweening = false;
         if (this._phase === 'entering') {
           this._phase = 'following';
+          // Liga os OrbitControls em volta do corpo: o usuário pode girar e
+          // dar zoom no planeta em foco. Limites de zoom relativos ao
+          // enquadramento (não os do sistema, cujo mínimo é maior que a
+          // distância de foco dos corpos pequenos).
+          this._prevBodyPos.copy(this._toTarget);
+          if (this.cameraRig && typeof this.cameraRig.enterFollow === 'function') {
+            const radius = this._resolveBodyRadius(this._focusedId);
+            const dist = Math.max(MIN_FOCUS_DISTANCE, radius * FOCUS_DISTANCE_FACTOR);
+            this.cameraRig.enterFollow(
+              this._toTarget,
+              dist * FOLLOW_ZOOM_RANGE[0],
+              dist * FOLLOW_ZOOM_RANGE[1],
+            );
+          }
         } else {
           // exiting → volta a idle e devolve os controls ao usuário.
           this._phase = 'idle';
@@ -369,21 +426,20 @@ export class FocusController {
     }
 
     if (this._phase === 'following' && this._focusedId) {
-      // Corpo em foco continua orbitando: mantemos a câmera "grudada" nele,
-      // preservando a DIREÇÃO de visão mas RENORMALIZANDO a distância para o
-      // enquadramento-alvo — assim o planeta fica sempre grande e consistente na
-      // tela (antes o offset acumulava e o planeta ia ficando pequeno/longe).
+      // Corpo em foco continua orbitando: transladamos a câmera junto com ele.
+      // O offset é medido em relação à posição do corpo no frame ANTERIOR —
+      // que era o alvo dos OrbitControls quando eles moveram a câmera neste
+      // frame — então rotação/zoom do usuário ficam preservados e o
+      // deslocamento do corpo não acumula no offset (o zoom fica nos limites
+      // dados em enterFollow).
       this._resolveBodyPosition(this._focusedId, this._tmpBodyPos);
-      const radius = this._resolveBodyRadius(this._focusedId);
-      const targetDist = Math.max(MIN_FOCUS_DISTANCE, radius * FOCUS_DISTANCE_FACTOR);
 
-      this._tmpOffset.copy(cam.position).sub(this._tmpBodyPos);
+      this._tmpOffset.copy(cam.position).sub(this._prevBodyPos);
       if (this._tmpOffset.lengthSq() < 1e-6) this._tmpOffset.set(0, 0.3, 1);
-      this._tmpOffset.normalize().multiplyScalar(targetDist);
 
       cam.position.copy(this._tmpBodyPos).add(this._tmpOffset);
-      this._tmpCurTarget.copy(this._tmpBodyPos);
-      this._applyTarget(this._tmpCurTarget);
+      this._applyTarget(this._tmpBodyPos);
+      this._prevBodyPos.copy(this._tmpBodyPos);
     }
   }
 
@@ -452,15 +508,33 @@ export class FocusController {
 
     const data = getBodyById(bodyId);
     const radius = this._resolveBodyRadius(bodyId);
-    const count = Math.min(SWARM_MAX_COUNT, Math.round(20000 + radius * 12000));
+
+    // Calibração pela referência (particles.casberry.in): 20k pontos de ~3px
+    // numa esfera que ocupa ~55% da altura da tela, com o fundo aparecendo
+    // ENTRE os pontos — é uma casca esparsa que o bloom acende, não uma
+    // superfície fechada. Nosso enquadramento em foco é equivalente (FOV 60,
+    // distância = 3·raio → ~58% da altura), então:
+    //  - tamanho: fixamos o ponto em PIXELS (SWARM_POINT_PX) e convertemos para
+    //    o uSize do shader (px = uSize·300/distância);
+    //  - contagem: SWARM_REFERENCE_COUNT quando o planeta preenche o
+    //    enquadramento; corpos pequenos (distância travada em
+    //    MIN_FOCUS_DISTANCE) aparecem menores e recebem menos pontos, na
+    //    proporção da área aparente, mantendo o mesmo espaçamento entre pontos.
+    const focusDistance = Math.max(MIN_FOCUS_DISTANCE, radius * FOCUS_DISTANCE_FACTOR);
+    const size = (SWARM_POINT_PX * focusDistance) / 300;
+    const apparent = (radius * FOCUS_DISTANCE_FACTOR) / focusDistance; // 0..1
+    const count = Math.min(
+      SWARM_MAX_COUNT,
+      Math.round(SWARM_REFERENCE_COUNT * apparent * apparent),
+    );
 
     let swarm = new FocusSwarm({
       renderer: this.renderer,
       radius,
       count,
       color: data ? data.corBase : 0xffffff,
-      size: 2.4,
-      brightness: 1.0,
+      size,
+      brightness: SWARM_BRIGHTNESS,
     });
     try {
       swarm.build();

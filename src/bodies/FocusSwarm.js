@@ -21,13 +21,21 @@ import renderVert from '../shaders/swarm-render.vert?raw';
 import renderFrag from '../shaders/swarm-render.frag?raw';
 
 // Parâmetros de simulação (ajustáveis). Escalados pelo raio em build().
+// Todas as forças abaixo são escaladas pelo RAIO do planeta no build() (como
+// já era feito para `flow`) — sem isso, uma força fixa desloca planetas
+// pequenos e grandes na mesma medida absoluta, o que (com o acúmulo de
+// velocidade por frame sob amortecimento) fazia o mouse arrancar partículas
+// para MUITO além da esfera (v_regime = força·dt·amortecimento/(1-amortecimento);
+// com a força antiga fixa em 55 isso dava ~5x o raio por segundo — daí a
+// "deformação feia" relatada).
 const SIM = Object.freeze({
-  spring: 6.0, // força da mola p/ casa (coesão da esfera)
-  flow: 2.2, // intensidade do turbilhão (curl)
+  spring: 9.0, // força da mola p/ casa (coesão/retorno — mais forte = "amassa" e volta rápido)
+  flow: 2.2, // intensidade do turbilhão (curl), × raio
   noiseScale: 0.18, // escala espacial do ruído (relativo ao raio)
   flowSpeed: 0.5, // evolução temporal do turbilhão
-  mouseStrength: 55.0, // intensidade da repulsão do mouse
-  damping: 0.9, // atrito (0..1)
+  mouseStrength: 3.0, // intensidade da repulsão do mouse, × raio (era fixa e desproporcional)
+  mouseRadiusFactor: 0.5, // alcance da repulsão, × raio — LOCALIZADO (era 1.3× = a esfera toda)
+  damping: 0.88, // atrito (0..1)
 });
 
 export class FocusSwarm {
@@ -113,8 +121,8 @@ export class FocusSwarm {
     velVar.material.uniforms.uFlow = { value: SIM.flow * this._radius };
     velVar.material.uniforms.uNoiseScale = { value: SIM.noiseScale / this._radius };
     velVar.material.uniforms.uFlowSpeed = { value: SIM.flowSpeed };
-    velVar.material.uniforms.uMouseStrength = { value: SIM.mouseStrength };
-    velVar.material.uniforms.uMouseRadius = { value: this._radius * 1.3 };
+    velVar.material.uniforms.uMouseStrength = { value: SIM.mouseStrength * this._radius };
+    velVar.material.uniforms.uMouseRadius = { value: this._radius * SIM.mouseRadiusFactor };
     velVar.material.uniforms.uDamping = { value: SIM.damping };
     velVar.material.uniforms.uHome = { value: homeTex };
 

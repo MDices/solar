@@ -35,7 +35,7 @@ export const PLANETS = [
   {
     id: 'mercury',
     nomePT: 'Mercúrio',
-    corBase: 0xb0b0b8, // cinza (GRAY no legado)
+    corBase: 0xc8c8dc, // cinza claro (GRAY no legado)
     raioRel: 0.9,
     distanciaRel: 14,
     velocidadeRel: 1.0, // 0.040 / 0.040
@@ -53,7 +53,7 @@ export const PLANETS = [
   {
     id: 'venus',
     nomePT: 'Vênus',
-    corBase: 0xe8a33d, // laranja (ORANGE)
+    corBase: 0xffb02e, // laranja (ORANGE)
     raioRel: 1.4,
     distanciaRel: 20,
     velocidadeRel: 0.375, // 0.015 / 0.040
@@ -71,7 +71,7 @@ export const PLANETS = [
   {
     id: 'earth',
     nomePT: 'Terra',
-    corBase: 0x3d7de8, // azul (BLUE)
+    corBase: 0x3d8dff, // azul (BLUE)
     raioRel: 1.5,
     distanciaRel: 26,
     velocidadeRel: 0.25, // 0.010 / 0.040
@@ -89,7 +89,7 @@ export const PLANETS = [
   {
     id: 'mars',
     nomePT: 'Marte',
-    corBase: 0xe0532b, // vermelho (RED)
+    corBase: 0xff5a2a, // vermelho (RED)
     raioRel: 1.1,
     distanciaRel: 32,
     velocidadeRel: 0.2, // 0.008 / 0.040
@@ -107,7 +107,7 @@ export const PLANETS = [
   {
     id: 'jupiter',
     nomePT: 'Júpiter',
-    corBase: 0xd8a06a, // laranja/bege
+    corBase: 0xf5b070, // laranja/bege
     raioRel: 4.0,
     distanciaRel: 44,
     velocidadeRel: 0.1, // 0.004 / 0.040
@@ -125,7 +125,7 @@ export const PLANETS = [
   {
     id: 'saturn',
     nomePT: 'Saturno',
-    corBase: 0xe6d28a, // amarelo (YELLOW)
+    corBase: 0xffe08a, // amarelo (YELLOW)
     raioRel: 3.5,
     distanciaRel: 56,
     velocidadeRel: 0.075, // 0.003 / 0.040
@@ -143,7 +143,7 @@ export const PLANETS = [
   {
     id: 'uranus',
     nomePT: 'Urano',
-    corBase: 0x8ad0e6, // azul claro/ciano (DARK_BLUE clareado p/ leitura)
+    corBase: 0x8ae8ff, // azul claro/ciano (DARK_BLUE clareado p/ leitura)
     raioRel: 2.4,
     distanciaRel: 68,
     velocidadeRel: 0.05, // 0.002 / 0.040
@@ -161,7 +161,7 @@ export const PLANETS = [
   {
     id: 'neptune',
     nomePT: 'Netuno',
-    corBase: 0x3d5de8, // azul (BLUE)
+    corBase: 0x4a6cff, // azul (BLUE)
     raioRel: 2.3,
     distanciaRel: 80,
     velocidadeRel: 0.025, // 0.001 / 0.040
