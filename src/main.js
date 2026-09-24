@@ -146,8 +146,12 @@ function main() {
     }
   });
 
-  // Fechar o InfoCard também limpa o foco.
+  // Fechar o InfoCard também limpa o foco; anterior/próximo troca o foco.
   infoCard.onClose(() => focusController.clearFocus());
+  infoCard.onNavigate((bodyId) => focusController.focus(bodyId));
+
+  // Botão "Visão geral" do console: sai do foco.
+  hud.onOverview(() => focusController.clearFocus());
 
   // Reset (botão/atalho R): limpa foco e restaura velocidade padrão.
   hud.onReset(() => {
@@ -173,14 +177,19 @@ function main() {
 
   // 8) Laço de render: atualiza tudo a cada frame.
   // Degradação adaptativa (spec seção 10): se o FPS ficar baixo por alguns
-  // segundos, desliga o bloom (o pós-processamento mais caro) para recuperar
-  // fluidez. Dispara uma única vez.
+  // segundos, reduz a resolução do bloom (o pós-processamento mais caro) para
+  // recuperar fluidez sem perder o glow. Dispara uma única vez.
+  // `?nodegrade` desliga o detector (captura de tela / máquinas sem GPU, onde o
+  // FPS baixo é do ambiente e não do que se quer avaliar).
+  const noDegrade = new URLSearchParams(window.location.search).has('nodegrade');
   const loop = new Loop({
-    onDegrade: () => {
-      // eslint-disable-next-line no-console
-      console.warn('[main] FPS baixo sustentado — desligando bloom (degradação graciosa).');
-      sceneManager.setBloomEnabled(false);
-    },
+    onDegrade: noDegrade
+      ? null
+      : () => {
+          // eslint-disable-next-line no-console
+          console.warn('[main] FPS baixo sustentado — reduzindo resolução do bloom (degradação graciosa).');
+          sceneManager.degradeBloom();
+        },
   });
 
   // Frustum reutilizado a cada frame para o culling por corpo (spec seção 5).
@@ -194,11 +203,13 @@ function main() {
     // esses ANTES de derivar o frustum, para que o culling use a pose do frame.
     const cameraMode = appState.get('cameraMode');
     // Os OrbitControls só devem estar ativos quando o usuário está de fato no
-    // comando: modo 'explore' E sem foco ativo (durante o foco o
+    // comando: modo 'explore' E sem tween de foco rodando (durante os tweens o
     // FocusController é dono da câmera; em cinematic é o CinematicPath).
+    // Enquanto SEGUE um corpo, os controles ficam ligados em volta dele (ver
+    // CameraRig.enterFollow) — o usuário gira/zoom no planeta em foco.
     // setControlsEnabled também ressincroniza os controles com a pose atual na
     // reativação, evitando o "salto" da câmera (bug relatado na revisão).
-    const userControlsCamera = cameraMode === 'explore' && !focusController.isActive();
+    const userControlsCamera = cameraMode === 'explore' && !focusController.isTweening();
     cameraRig.setControlsEnabled(userControlsCamera);
     cameraRig.update(dt);
     if (cameraMode === 'cinematic') {
